@@ -17,8 +17,9 @@ def model_fn_decorator(criterion):
 
     def model_fn(model, data, epoch=0, eval=False):
         inputs, labels = data
-        inputs = Variable(inputs.cuda(async=True), volatile=eval)
-        labels = Variable(labels.cuda(async=True), volatile=eval)
+        with torch.no_grad():
+            inputs = Variable(inputs.cuda(async=True))
+            labels = Variable(labels.cuda(async=True))
 
         preds = model(inputs)
         labels = labels.view(-1)

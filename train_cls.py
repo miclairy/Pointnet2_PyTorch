@@ -11,6 +11,7 @@ import tensorboard_logger as tb_log
 
 from models import Pointnet2ClsMSG as Pointnet
 from models.pointnet2_msg_cls import model_fn_decorator
+from data.part_datasets import PartDataset, normalize, transform
 from data import ModelNet40Cls
 import utils.pytorch_utils as pt_utils
 import data.data_utils as d_utils
@@ -25,7 +26,7 @@ def parse_args():
         description="Arguments for cls training",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("-batch_size", type=int, default=16, help="Batch size")
+    parser.add_argument("-batch_size", type=int, default=10, help="Batch size")
     parser.add_argument(
         "-num_points",
         type=int,
@@ -93,9 +94,8 @@ if __name__ == "__main__":
         d_utils.PointcloudRandomInputDropout()
     ])
 
-    test_set = ModelNet40Cls(
-        args.num_points, BASE_DIR, transforms=transforms, train=False
-    )
+    test_set = PartDataset(root = '../PointNet_Data', classification = True, train=None, npoints = args.num_points, transform = normalize)
+
     test_loader = DataLoader(
         test_set,
         batch_size=args.batch_size,
@@ -104,7 +104,8 @@ if __name__ == "__main__":
         pin_memory=True
     )
 
-    train_set = ModelNet40Cls(args.num_points, BASE_DIR, transforms=transforms)
+    train_set = PartDataset(root = '../PointNet_Data', classification = True, train=True, npoints = args.num_points, transform = normalize)
+
     train_loader = DataLoader(
         train_set,
         batch_size=args.batch_size,
@@ -112,10 +113,11 @@ if __name__ == "__main__":
         num_workers=2,
         pin_memory=True
     )
-
+    print('LOADED')
+    
     tb_log.configure('runs/{}'.format(args.run_name))
 
-    model = Pointnet(input_channels=0, num_classes=40, use_xyz=True)
+    model = Pointnet(3, input_channels=0, use_xyz=True)
     model.cuda()
     optimizer = optim.Adam(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
@@ -124,7 +126,7 @@ if __name__ == "__main__":
     bn_lbmd = lambda e: max(args.bn_momentum * args.bnm_decay**(e // args.decay_step), bnm_clip)
 
     if args.checkpoint is not None:
-        start_epoch, best_loss = pt_utils.load_checkpoint(
+        it, start_epoch, best_loss = pt_utils.load_checkpoint(
             model, optimizer, filename=args.checkpoint.split(".")[0]
         )
 

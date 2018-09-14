@@ -8,7 +8,7 @@ cuda_include_directories("${CMAKE_CURRENT_SOURCE_DIR}/utils/cinclude")
 file(GLOB cuda_kernels_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/csrc/*.cu")
 cuda_compile(cuda_kernels SHARED ${cuda_kernels_src} OPTIONS -O3)
 
-set(BUILD_CMD python "${CMAKE_CURRENT_SOURCE_DIR}/utils/build_ffi.py")
+set(BUILD_CMD python3 "${CMAKE_CURRENT_SOURCE_DIR}/utils/build_ffi.py")
 file(GLOB wrapper_headers "${CMAKE_CURRENT_SOURCE_DIR}/utils/cinclude/*wrapper.h")
 file(GLOB wrapper_sources "${CMAKE_CURRENT_SOURCE_DIR}/utils/csrs/*.c")
 add_custom_command(OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/utils/_ext/pointnet2/_pointnet2.so"
