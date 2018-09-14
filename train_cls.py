@@ -12,6 +12,7 @@ import tensorboard_logger as tb_log
 from models import Pointnet2ClsMSG as Pointnet
 from models.pointnet2_msg_cls import model_fn_decorator
 from data.part_datasets import PartDataset, normalize, transform
+from data.meta_dataset import MetaDataset, pad
 from data import ModelNet40Cls
 import utils.pytorch_utils as pt_utils
 import data.data_utils as d_utils
@@ -95,6 +96,7 @@ if __name__ == "__main__":
     ])
 
     test_set = PartDataset(root = '../PointNet_Data', classification = True, train=None, npoints = args.num_points, transform = normalize)
+    # test_set = MetaDataset(root = '../meta_data', train = None, transform=pad)
 
     test_loader = DataLoader(
         test_set,
@@ -105,6 +107,7 @@ if __name__ == "__main__":
     )
 
     train_set = PartDataset(root = '../PointNet_Data', classification = True, train=True, npoints = args.num_points, transform = normalize)
+    # train_set = MetaDataset(root = '../meta_data', train = True, transform=pad)
 
     train_loader = DataLoader(
         train_set,
@@ -114,7 +117,7 @@ if __name__ == "__main__":
         pin_memory=True
     )
     print('LOADED')
-    
+
     tb_log.configure('runs/{}'.format(args.run_name))
 
     model = Pointnet(3, input_channels=0, use_xyz=True)

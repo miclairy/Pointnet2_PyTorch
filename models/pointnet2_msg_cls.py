@@ -26,9 +26,12 @@ def model_fn_decorator(criterion):
         loss = criterion(preds, labels)
 
         _, classes = torch.max(preds.data, -1)
+        # print(classes, labels.data)
         acc = (classes == labels.data).sum() / labels.numel()
 
-        return ModelReturn(preds, loss, {"acc": acc})
+        return ModelReturn(preds, loss, {"acc": acc, 
+        "correct": (classes == labels.data).sum(),
+        "size": labels.numel()})
 
     return model_fn
 

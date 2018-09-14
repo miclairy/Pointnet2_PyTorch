@@ -1,73 +1,165 @@
-from __future__ import print_function
-import argparse
-import os
-import random
-import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.parallel
-import torch.backends.cudnn as cudnn
 import torch.optim as optim
-import torch.utils.data
-import torchvision.datasets as dset
-import torchvision.transforms as transforms
-import torchvision.utils as vutils
+import torch.optim.lr_scheduler as lr_sched
+import torch.nn as nn
+import numpy as np
+from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from data.part_datasetss import PartDataset, normalize, transform
-from pointnet import PointNetCls
-from pointnet2 import PointNetCls2
-import torch.nn.functional as F
-import matplotlib.pyplot as plt
-from data.meta_dataset import MetaDataset, pad
+from torchvision import transforms
+import os
+import tensorboard_logger as tb_log
 
 from models import Pointnet2ClsMSG as Pointnet
 from models.pointnet2_msg_cls import model_fn_decorator
+from data.part_datasets import PartDataset, normalize, transform
+from data.meta_dataset import MetaDataset, pad
+from data import ModelNet40Cls
+import utils.pytorch_utils as pt_utils
+import data.data_utils as d_utils
+import argparse
+import tqdm
 
-if __name__ == '__main__':
-    #showpoints(np.random.randn(2500,3), c1 = np.random.uniform(0,1,size = (2500)))
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--model', type=str, default = '',  help='model path')
-    parser.add_argument('--num_points', type=int, default=2500, help='input batch size')
+torch.backends.cudnn.enabled = True
+torch.backends.cudnn.benchmark = True
 
 
-    opt = parser.parse_args()
-    print (opt)
-    path = '../meta_data'
-    batch = 15
-    print("Testing on: ", path)
-    # test_dataset = MetaDataset(root = '../meta_data', train = False, transform=pad)
-    test_dataset = PartDataset(root = path, classification = True, train = False, npoints = opt.num_points, transform = normalize)
-    testdataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch,
-                                            shuffle=True, num_workers=4 )
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Arguments for cls training",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument("-batch_size", type=int, default=10, help="Batch size")
+    parser.add_argument(
+        "-num_points",
+        type=int,
+        default=1024,
+        help="Number of points to train with"
+    )
+    parser.add_argument(
+        "-weight_decay",
+        type=float,
+        default=1e-5,
+        help="L2 regularization coeff"
+    )
+    parser.add_argument(
+        "-lr", type=float, default=1e-2, help="Initial learning rate"
+    )
+    parser.add_argument(
+        "-lr_decay", type=float, default=0.7, help="Learning rate decay gamma"
+    )
+    parser.add_argument(
+        "-decay_step", type=int, default=20, help="Learning rate decay step"
+    )
+    parser.add_argument(
+        "-bn_momentum",
+        type=float,
+        default=0.5,
+        help="Initial batch norm momentum"
+    )
+    parser.add_argument(
+        "-bnm_decay",
+        type=float,
+        default=0.5,
+        help="Batch norm momentum decay gamma"
+    )
+    parser.add_argument(
+        "-checkpoint", type=str, default=None, help="Checkpoint to start from"
+    )
+    parser.add_argument(
+        "-epochs", type=int, default=200, help="Number of epochs to train for"
+    )
+    parser.add_argument(
+        "-run_name",
+        type=str,
+        default="cls_run_1",
+        help="Name for run in tensorboard_logger"
+    )
 
-    # classifier = PointNetCls(k = len(test_dataset.classes))
-    classifier = Pointnet(3, input_channels=0, use_xyz=True)
-    classifier.load_state_dict(torch.load(opt.model))
-    # classifier.torch.load(opt.model)
-    # classifier = torch.load(opt.model)
-    classifier.cuda()
+    return parser.parse_args()
 
-    classifier.eval()
 
-    tot_correct = 0
-    print(len(testdataloader))
-    for i, data in enumerate(testdataloader, 0):
-        points, target = data
-        points, target = Variable(points), Variable(target[:, 0])
-        points = points.transpose(2, 1)
-        points, target = points.cuda(), target.cuda()
-        pred, _ = classifier(points)
-        loss = F.nll_loss(pred, target)
+lr_clip = 1e-5
+bnm_clip = 1e-2
 
-        pred_choice = pred.data.max(1)[1]
-        correct = pred_choice.eq(target.data).cpu().sum()
-        tot_correct += float(correct)
-        
-        print('i:{} loss: {} accuracy: {}'.format(i, loss.item(), float(correct) / batch))
-        pred_choice = [int(c) for c in pred_choice]
-        target = [int(c) for c in target]
-        print(i,list(zip(pred_choice, target)))
+if __name__ == "__main__":
+    args = parse_args()
 
-    print("total accuracy: ", tot_correct / len(test_dataset))
+    BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+
+    transforms = transforms.Compose([
+        d_utils.PointcloudToTensor(),
+        d_utils.PointcloudScale(),
+        d_utils.PointcloudRotate(),
+        d_utils.PointcloudRotatePerturbation(),
+        d_utils.PointcloudTranslate(),
+        d_utils.PointcloudJitter(),
+        d_utils.PointcloudRandomInputDropout()
+    ])
+
+    test_set = PartDataset(root = '../PointNet_Data', classification = True, train=False, npoints = args.num_points, transform = normalize)
+    # test_set = MetaDataset(root = '../meta_data', train = None, transform=pad)
+
+    test_loader = DataLoader(
+        test_set,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True
+    )
+
+    print('LOADED')
+
+    tb_log.configure('runs/{}'.format(args.run_name))
+
+    model = Pointnet(3, input_channels=3, use_xyz=True)
+    model.cuda()
+    optimizer = optim.Adam(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
+    lr_lbmd = lambda e: max(args.lr_decay**(e // args.decay_step), lr_clip / args.lr)
+    bn_lbmd = lambda e: max(args.bn_momentum * args.bnm_decay**(e // args.decay_step), bnm_clip)
+    
+    model_fn = model_fn_decorator(nn.CrossEntropyLoss())
+
+    if args.checkpoint is not None:
+        filename = "{}.pth.tar".format(args.checkpoint.split('.')[0])
+        if os.path.isfile(filename):
+            print("==> Testing checkpoint '{}'".format(filename))
+            checkpoint = torch.load(filename)
+            epoch = checkpoint['epoch']
+            it = checkpoint.get('it', 0.0)
+            best_prec = checkpoint['best_prec']
+            if checkpoint['model_state'] is not None:
+                model.load_state_dict(checkpoint['model_state'])
+            if optimizer is not None and checkpoint['optimizer_state'] is not None:
+                optimizer.load_state_dict(checkpoint['optimizer_state'])
+
+            model.eval()
+
+            eval_dict = {}
+            total_loss = 0.0
+            count = 0.0
+            correct = 0
+            for i, data in tqdm.tqdm(enumerate(test_loader, 0), total=len(test_loader),
+                                    leave=False, desc='val'):
+                optimizer.zero_grad()
+
+                _, loss, eval_res = model_fn(model, data, eval=True)
+
+                total_loss += loss.data[0]
+                count += eval_res['size']
+                correct += eval_res['correct'].item()
+                for k, v in eval_res.items():
+                    if v is not None:
+                        eval_dict[k] = eval_dict.get(k, []) + [v]
+
+            print(eval_dict)
+
+            print("test loss {} accuracy {}".format(total_loss / count, correct / count))
+
+
+
+
+    
+
+    

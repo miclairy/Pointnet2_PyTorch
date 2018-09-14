@@ -42,7 +42,9 @@ class MetaDataset(data.Dataset):
         cls = self.classes[self.datapath[index][0]]     
         data_set = pd.read_csv(filename[1])        
         
-        headers = ['position x', 'position y', 'area px', 'area_mm', 
+        data_set.insert(3, 'fake z', 0)
+
+        headers = ['position x', 'position y', 'fake z', 'area px', 'area_mm', 
                             'width ellipse', 'height ellipse', 'angle', 'gamma', 
                              'solidity', 'circularity', 'intensity']
         one_hot_headers = ["('left', 'down')",  "('right', 'down')",  "('right', 'up')", "('left', 'up')",  '?']
@@ -57,6 +59,7 @@ class MetaDataset(data.Dataset):
             data_set = self.transform(data_set)
 
         data_set.fillna(-1, inplace=True)
+        
         data_values = np.array(data_set[headers + one_hot_headers].values).astype(np.float32)
         data_set = torch.from_numpy(data_values)
         
