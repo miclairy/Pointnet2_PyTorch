@@ -26,7 +26,8 @@ def model_fn_decorator(criterion):
         loss = criterion(preds, labels)
 
         _, classes = torch.max(preds.data, -1)
-        # print(classes, labels.data)
+        # print([(x[0].item(), x[1].item()) for x in zip(classes, labels.data)])
+
         acc = (classes == labels.data).sum() / labels.numel()
 
         return ModelReturn(preds, loss, {"acc": acc, 
@@ -52,7 +53,7 @@ class Pointnet2MSG(nn.Module):
             Whether or not to use the xyz position of a point as a feature
     """
 
-    def __init__(self, num_classes, input_channels=3, use_xyz=True):
+    def __init__(self, num_classes, input_channels=3, use_xyz=True, base_features=64):
         super().__init__()
 
         self.SA_modules = nn.ModuleList()
@@ -60,36 +61,36 @@ class Pointnet2MSG(nn.Module):
             PointnetSAModuleMSG(
                 npoint=512,
                 radii=[0.1, 0.2, 0.4],
-                nsamples=[32, 64, 128],
-                mlps=[[input_channels, 64], [input_channels, 128],
-                      [input_channels, 128]],
+                nsamples=[base_features // 2, base_features, base_features * 2],
+                mlps=[[input_channels, base_features], [input_channels, base_features * 2],
+                      [input_channels, base_features * 2]],
                 use_xyz=use_xyz
             )
         )
 
-        input_channels = 64 + 128 + 128
+        input_channels = base_features + base_features * 2 + base_features *2
         self.SA_modules.append(
             PointnetSAModuleMSG(
                 npoint=128,
-                radii=[0.2, 0.4, 0.8],
-                nsamples=[16, 32, 64],
-                mlps=[[input_channels, 128], [input_channels, 256],
-                      [input_channels, 256]],
+                radii=[0.1, 0.2, 0.4],
+                nsamples=[base_features // 2, base_features, base_features * 2],
+                 mlps=[[input_channels, base_features * 2], [input_channels, base_features * 2 * 2],
+                      [input_channels, base_features * 2 * 2]],
                 use_xyz=use_xyz
             )
         )
         self.SA_modules.append(
             PointnetSAModule(
-                mlp=[128 + 256 + 256, 256, 512, 1024], use_xyz=use_xyz
+                mlp=[base_features * 2 + base_features * 2 * 2 + base_features * 2 * 2, base_features * 2 * 2, base_features * 2 * 2 * 2, base_features * 2 * 2 *2 *2], use_xyz=use_xyz
             )
         )
 
         self.FC_layer = nn.Sequential(
-            pt_utils.FC(1024, 512, bn=True),
+            pt_utils.FC(base_features * 2 * 2 *2 *2, base_features * 2 * 2 *2, bn=True),
             nn.Dropout(p=0.5),
-            pt_utils.FC(512, 256, bn=True),
+            pt_utils.FC(base_features * 2 * 2 *2 , base_features * 2 *2 , bn=True),
             nn.Dropout(p=0.5),
-            pt_utils.FC(256, num_classes, activation=None)
+            pt_utils.FC(base_features * 2 * 2, num_classes, activation=None)
         )
 
     def _break_up_pc(self, pc):
@@ -102,7 +103,7 @@ class Pointnet2MSG(nn.Module):
         return xyz, features
 
     def forward(self, pointcloud: torch.cuda.FloatTensor):
-        r"""
+        """
             Forward pass of the network
 
             Parameters

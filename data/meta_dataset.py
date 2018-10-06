@@ -73,10 +73,11 @@ class MetaDataset(data.Dataset):
 def normalize(data_set):
     x, y = data_set[['position x']].values.astype(float), data_set[['position y']].values.astype(float)
     min_max_scaler = preprocessing.MinMaxScaler()
-    x_scaled = min_max_scaler.fit_transform(x)
-    y_scaled = min_max_scaler.fit_transform(y)
-    data_set['position x'] = x_scaled
-    data_set['position y'] = y_scaled
+    if x.shape[0] > 1:
+        x_scaled = min_max_scaler.fit_transform(x)
+        y_scaled = min_max_scaler.fit_transform(y)
+        data_set['position x'] = x_scaled
+        data_set['position y'] = y_scaled
     
 
     return data_set

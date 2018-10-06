@@ -96,8 +96,8 @@ if __name__ == "__main__":
         d_utils.PointcloudRandomInputDropout()
     ])
 
-    test_set = PartDataset(root = '../PointNet_Data', classification = True, train=False, npoints = args.num_points, transform = normalize)
-    # test_set = MetaDataset(root = '../meta_data', train = None, transform=pad)
+    test_set = PartDataset(root = '/media/cba62/Elements/high_thres', classification = True, train=False, npoints = args.num_points, transform = None)
+    # test_set = MetaDataset(root = '/media/cba62/Elements/old-Meta_Data', train = None, transform=pad)
 
     test_loader = DataLoader(
         test_set,
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     tb_log.configure('runs/{}'.format(args.run_name))
 
-    model = Pointnet(3, input_channels=3, use_xyz=True)
+    model = Pointnet(3, input_channels=0, use_xyz=True, base_features=16)
     model.cuda()
     optimizer = optim.Adam(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
@@ -121,8 +121,10 @@ if __name__ == "__main__":
     
     model_fn = model_fn_decorator(nn.CrossEntropyLoss())
 
+
     if args.checkpoint is not None:
-        filename = "{}.pth.tar".format(args.checkpoint.split('.')[0])
+       
+        filename = "{}.pth.tar".format(args.checkpoint.split('.')[0]) 
         if os.path.isfile(filename):
             print("==> Testing checkpoint '{}'".format(filename))
             checkpoint = torch.load(filename)
@@ -140,20 +142,19 @@ if __name__ == "__main__":
             total_loss = 0.0
             count = 0.0
             correct = 0
+
             for i, data in tqdm.tqdm(enumerate(test_loader, 0), total=len(test_loader),
                                     leave=False, desc='val'):
                 optimizer.zero_grad()
 
                 _, loss, eval_res = model_fn(model, data, eval=True)
 
-                total_loss += loss.data[0]
+                total_loss += loss.data.item()
                 count += eval_res['size']
                 correct += eval_res['correct'].item()
                 for k, v in eval_res.items():
                     if v is not None:
                         eval_dict[k] = eval_dict.get(k, []) + [v]
-
-            print(eval_dict)
 
             print("test loss {} accuracy {}".format(total_loss / count, correct / count))
 

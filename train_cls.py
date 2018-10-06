@@ -65,7 +65,7 @@ def parse_args():
         "-checkpoint", type=str, default=None, help="Checkpoint to start from"
     )
     parser.add_argument(
-        "-epochs", type=int, default=200, help="Number of epochs to train for"
+        "-epochs", type=int, default=25, help="Number of epochs to train for"
     )
     parser.add_argument(
         "-run_name",
@@ -95,32 +95,32 @@ if __name__ == "__main__":
         d_utils.PointcloudRandomInputDropout()
     ])
 
-    test_set = PartDataset(root = '../PointNet_Data', classification = True, train=None, npoints = args.num_points, transform = normalize)
-    # test_set = MetaDataset(root = '../meta_data', train = None, transform=pad)
+    test_set = PartDataset(root = '/media/cba62/Elements/old-PointNet_Data/', classification = True, train=None, npoints = args.num_points, transform=normalize)
+    # test_set = MetaDataset(root = '/media/cba62/Elements/meta_data', train = None, transform=pad)
 
     test_loader = DataLoader(
         test_set,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=2,
+        num_workers=4,
         pin_memory=True
     )
 
-    train_set = PartDataset(root = '../PointNet_Data', classification = True, train=True, npoints = args.num_points, transform = normalize)
-    # train_set = MetaDataset(root = '../meta_data', train = True, transform=pad)
+    train_set = PartDataset(root = '/media/cba62/Elements/old-PointNet_Data/', classification = True, train=True, npoints = args.num_points, transform=normalize)
+    # train_set = MetaDataset(root = '/media/cba62/Elements/meta_data', train = True, transform=pad)
 
     train_loader = DataLoader(
         train_set,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=2,
+        num_workers=4,
         pin_memory=True
     )
     print('LOADED')
 
     tb_log.configure('runs/{}'.format(args.run_name))
 
-    model = Pointnet(3, input_channels=0, use_xyz=True)
+    model = Pointnet(3, input_channels=0, use_xyz=True, base_features=16)
     model.cuda()
     optimizer = optim.Adam(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
