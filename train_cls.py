@@ -41,7 +41,7 @@ def parse_args():
         help="L2 regularization coeff"
     )
     parser.add_argument(
-        "-lr", type=float, default=1e-2, help="Initial learning rate"
+        "-lr", type=float, default=0.005, help="Initial learning rate"
     )
     parser.add_argument(
         "-lr_decay", type=float, default=0.7, help="Learning rate decay gamma"

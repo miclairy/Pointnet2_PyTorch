@@ -96,7 +96,7 @@ if __name__ == "__main__":
         d_utils.PointcloudRandomInputDropout()
     ])
 
-    test_set = PartDataset(root = '/media/cba62/Elements/high_thres', classification = True, train=False, npoints = args.num_points, transform = None)
+    test_set = PartDataset(root = '/media/cba62/Elements/old-PointNet_Data', classification = True, train=None, npoints = args.num_points, transform = normalize)
     # test_set = MetaDataset(root = '/media/cba62/Elements/old-Meta_Data', train = None, transform=pad)
 
     test_loader = DataLoader(
