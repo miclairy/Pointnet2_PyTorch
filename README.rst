@@ -14,4 +14,6 @@ Building CUDA kernels
 Exampling training
 ------------------
 
-Two training examples are provided by ``train_sem_seg.py`` and ``train_cls.py``.  The datasets for both will be downloaded automatically by default
+Two training examples are provided by ``train_sem_seg.py`` and ``train_cls.py``. 
+
+Modified output of pytorch modules and added meta_dataset.py in data to load BPA meta_dataset and part_datasets.py for loading in point data.
